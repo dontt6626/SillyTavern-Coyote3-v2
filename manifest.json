@@ -1,0 +1,11 @@
+{
+    "display_name": "Coyote 3.0 Control v2",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "dontt6626",
+    "version": "2.0.0",
+    "homePage": "https://github.com/dontt6626/SillyTavern-Coyote3-v2"
+}

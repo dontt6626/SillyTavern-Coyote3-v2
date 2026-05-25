@@ -1,0 +1,105 @@
+<div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <b>Coyote 3.0 v2 <span style="font-size: 0.8em; opacity: 0.7;">v2.0.0</span></b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+        <div class="flex-container flexFlowColumn wide100p" style="gap: 10px;">
+
+            <label class="checkbox_label" for="c3v2_enabled">
+                <input type="checkbox" id="c3v2_enabled" />
+                <span>Enable AI Control</span>
+            </label>
+
+            <div id="c3v2_status" class="c3v2_status disconnected">
+                <strong>Status:</strong> <span id="c3v2_status_text">Not Connected</span>
+            </div>
+
+            <div style="margin-top: 5px; display: flex; gap: 5px; flex-wrap: wrap;">
+                <button id="c3v2_pair" class="menu_button" style="flex: 1; min-width: 120px;">
+                    <i class="fa-brands fa-bluetooth-b"></i> Pair Device
+                </button>
+                <button id="c3v2_disconnect" class="menu_button" style="flex: 1; min-width: 120px;">
+                    <i class="fa-solid fa-power-off"></i> Disconnect
+                </button>
+            </div>
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">Live Stats</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="c3v2_stat_box"><div class="c3v2_stat_label">Target A</div><div class="c3v2_stat_value" id="c3v2_targetA">0</div></div>
+                <div class="c3v2_stat_box"><div class="c3v2_stat_label">Target B</div><div class="c3v2_stat_value" id="c3v2_targetB">0</div></div>
+                <div class="c3v2_stat_box"><div class="c3v2_stat_label">Current A</div><div class="c3v2_stat_value" id="c3v2_currentA">0</div></div>
+                <div class="c3v2_stat_box"><div class="c3v2_stat_label">Current B</div><div class="c3v2_stat_value" id="c3v2_currentB">0</div></div>
+                <div class="c3v2_stat_box"><div class="c3v2_stat_label">Battery</div><div class="c3v2_stat_value" id="c3v2_battery">--</div></div>
+            </div>
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">Output Volume</h4>
+            <small class="notes">Scales all output like a volume knob (0-100%)</small>
+
+            <label for="c3v2_volume_a" style="margin-bottom: 3px;"><b>Channel A Volume</b></label>
+            <input type="range" id="c3v2_volume_a" min="0" max="100" value="100" style="width: 100%;" />
+
+            <label for="c3v2_volume_b" style="margin-top: 8px; margin-bottom: 3px;"><b>Channel B Volume</b></label>
+            <input type="range" id="c3v2_volume_b" min="0" max="100" value="100" style="width: 100%;" />
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">Waveform</h4>
+            <label for="c3v2_wave_a" style="margin-bottom: 3px;"><b>Channel A</b></label>
+            <select id="c3v2_wave_a" class="text_pole">
+                <option value="gentle">Gentle</option>
+                <option value="pulse">Pulse</option>
+                <option value="wave">Wave</option>
+                <option value="intense">Intense</option>
+                <option value="tease">Tease</option>
+            </select>
+
+            <label for="c3v2_wave_b" style="margin-top: 8px; margin-bottom: 3px;"><b>Channel B</b></label>
+            <select id="c3v2_wave_b" class="text_pole">
+                <option value="gentle">Gentle</option>
+                <option value="pulse">Pulse</option>
+                <option value="wave">Wave</option>
+                <option value="intense">Intense</option>
+                <option value="tease">Tease</option>
+            </select>
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">Safety Limits</h4>
+            <label for="c3v2_limit_a"><b>Soft Limit A (0-200)</b></label>
+            <input type="number" id="c3v2_limit_a" class="text_pole" value="200" min="0" max="200" />
+
+            <label for="c3v2_limit_b" style="margin-top: 8px;"><b>Soft Limit B (0-200)</b></label>
+            <input type="number" id="c3v2_limit_b" class="text_pole" value="200" min="0" max="200" />
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">Test Controls</h4>
+            <small class="notes">Click to set target intensity. Device output = target × volume%</small>
+
+            <div style="margin-top: 5px;">
+                <b>Channel A</b>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px;">
+                    <button class="menu_button c3v2-test-a" data-value="25" style="flex: 1;">25</button>
+                    <button class="menu_button c3v2-test-a" data-value="50" style="flex: 1;">50</button>
+                    <button class="menu_button c3v2-test-a" data-value="100" style="flex: 1;">100</button>
+                    <button class="menu_button c3v2-test-a" data-value="200" style="flex: 1;">MAX</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 8px;">
+                <b>Channel B</b>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px;">
+                    <button class="menu_button c3v2-test-b" data-value="25" style="flex: 1;">25</button>
+                    <button class="menu_button c3v2-test-b" data-value="50" style="flex: 1;">50</button>
+                    <button class="menu_button c3v2-test-b" data-value="100" style="flex: 1;">100</button>
+                    <button class="menu_button c3v2-test-b" data-value="200" style="flex: 1;">MAX</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 8px; display: flex; gap: 5px;">
+                <button id="c3v2_stop" class="menu_button" style="flex: 1; background-color: #d9534f; border-color: #d43f3a;">
+                    <i class="fa-solid fa-stop"></i> Stop All
+                </button>
+            </div>
+
+            <h4 style="margin-top: 10px; margin-bottom: 5px;">AI Guidelines</h4>
+            <textarea id="c3v2_guidelines" class="text_pole textarea_compact" rows="3"></textarea>
+
+        </div>
+    </div>
+</div>
