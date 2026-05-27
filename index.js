@@ -126,6 +126,10 @@ let rampCurrentB = 0;
 let rampTimer = null;
 const RAMP_STEP = 2;   // units per 50ms tick
 
+// --- Runtime waveform presets (AI can override settings) ---
+let activePresetA = null;  // null = use settings.waveformA
+let activePresetB = null;  // null = use settings.waveformB
+
 // --- AI command state ---
 let streamingText = '';
 let messageCommands = [];
@@ -247,6 +251,7 @@ function onDisconnected() {
     if (b0Timer) { clearInterval(b0Timer); b0Timer = null; }
     targetA = 0; targetB = 0;
     rampCurrentA = 0; rampCurrentB = 0;
+    activePresetA = null; activePresetB = null;
     currentA = 0; currentB = 0;
     awaitingAck = false; pendingMode = 0;
     extension_settings[MODULE_NAME].connected = false;
@@ -302,9 +307,11 @@ async function sendB0() {
     const volA = (s.volumeA ?? 100) / 100;
     const volB = (s.volumeB ?? 100) / 100;
 
-    // Always use selected waveform presets, scale by ramp current + volume
-    const packetA = getWavePacketRaw(s.waveformA || 'gentle');
-    const packetB = getWavePacketRaw(s.waveformB || 'gentle');
+    // Use AI-selected preset if active, otherwise fall back to settings
+    const presetA = activePresetA || s.waveformA || 'gentle';
+    const presetB = activePresetB || s.waveformB || 'gentle';
+    const packetA = getWavePacketRaw(presetA);
+    const packetB = getWavePacketRaw(presetB);
 
     const scaleA = (rampCurrentA / 200) * volA;
     const scaleB = (rampCurrentB / 200) * volB;
@@ -374,12 +381,18 @@ function parseCommands(text) {
         }
         if (['channela', 'a'].includes(action)) {
             const v = parseInt(attrs[action] || attrs.intensity || attrs.strength);
-            if (!isNaN(v)) commands.push({ type: 'strength', channel: 'A', value: v, time: parseFloat(attrs.time || attrs.duration || 5) });
+            const preset = attrs.preset || attrs.waveform || attrs.pattern;
+            if (!isNaN(v)) {
+                commands.push({ type: 'strength', channel: 'A', value: v, time: parseFloat(attrs.time || attrs.duration || 5), preset });
+            }
             continue;
         }
         if (['channelb', 'b'].includes(action)) {
             const v = parseInt(attrs[action] || attrs.intensity || attrs.strength);
-            if (!isNaN(v)) commands.push({ type: 'strength', channel: 'B', value: v, time: parseFloat(attrs.time || attrs.duration || 5) });
+            const preset = attrs.preset || attrs.waveform || attrs.pattern;
+            if (!isNaN(v)) {
+                commands.push({ type: 'strength', channel: 'B', value: v, time: parseFloat(attrs.time || attrs.duration || 5), preset });
+            }
             continue;
         }
         if (action === 'combo') {
@@ -403,8 +416,13 @@ function sendCommand(cmd) {
 
     switch (cmd.type) {
         case 'strength': {
-            if (cmd.channel === 'A') targetA = clamp(cmd.value, 0, s.limitA || 200);
-            else targetB = clamp(cmd.value, 0, s.limitB || 200);
+            if (cmd.channel === 'A') {
+                targetA = clamp(cmd.value, 0, s.limitA || 200);
+                if (cmd.preset && PRESETS[cmd.preset]) activePresetA = cmd.preset;
+            } else {
+                targetB = clamp(cmd.value, 0, s.limitB || 200);
+                if (cmd.preset && PRESETS[cmd.preset]) activePresetB = cmd.preset;
+            }
             return true;
         }
         case 'combo': {
@@ -417,6 +435,8 @@ function sendCommand(cmd) {
         }
         case 'stop':
             targetA = 0; targetB = 0;
+            activePresetA = null;
+            activePresetB = null;
             if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; }
             isLooping = false;
             return true;
@@ -503,6 +523,8 @@ function generatePrompt() {
     return `You can control the user's DG-LAB Coyote 3.0 device:
 <coyote3>
 Commands: <coyote3:a="X" time="Y"/> (A=0-${s.limitA || 200}), <coyote3:b="X" time="Y"/> (B=0-${s.limitB || 200})
+Waveform presets: gentle, pulse, wave, intense, tease
+You can pick a waveform per command: <coyote3:a="50" time="5" preset="intense"/>
 Volume: A=${volA}%, B=${volB}%
 <coyote3:stop/> to stop. <coyote3:clear channel="A"/> to clear.
 Guidelines: ${s.guidelines || ''}
@@ -538,6 +560,11 @@ function updateStatus() {
     $('#c3v2_currentA').text(Math.round(rampCurrentA));
     $('#c3v2_currentB').text(Math.round(rampCurrentB));
     $('#c3v2_battery').text(batteryLevel !== null ? batteryLevel + '%' : '--');
+
+    const presetA = activePresetA || s.waveformA || 'gentle';
+    const presetB = activePresetB || s.waveformB || 'gentle';
+    $('#c3v2_preset_a').text(presetA);
+    $('#c3v2_preset_b').text(presetB);
 }
 
 function loadSettings() {
