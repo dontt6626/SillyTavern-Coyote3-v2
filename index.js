@@ -114,11 +114,17 @@ let bluetoothConnected = false;
 let seq = 0;
 let pendingMode = 0;
 let awaitingAck = false;
-let targetA = 0;
+let targetA = 0;       // ramp destination
 let targetB = 0;
-let currentA = 0;
+let currentA = 0;      // echoed from B1 feedback
 let currentB = 0;
 let batteryLevel = null;
+
+// --- Ramping state ---
+let rampCurrentA = 0;  // smoothed output value (0-200)
+let rampCurrentB = 0;
+let rampTimer = null;
+const RAMP_STEP = 2;   // units per 50ms tick
 
 // --- AI command state ---
 let streamingText = '';
@@ -138,6 +144,38 @@ function hexToBytes(hex) {
 
 function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
+}
+
+function startRamping() {
+    if (rampTimer) return;
+    rampTimer = setInterval(() => {
+        // A channel
+        const diffA = targetA - rampCurrentA;
+        if (Math.abs(diffA) <= RAMP_STEP) {
+            rampCurrentA = targetA;
+        } else {
+            rampCurrentA += diffA > 0 ? RAMP_STEP : -RAMP_STEP;
+        }
+        // B channel
+        const diffB = targetB - rampCurrentB;
+        if (Math.abs(diffB) <= RAMP_STEP) {
+            rampCurrentB = targetB;
+        } else {
+            rampCurrentB += diffB > 0 ? RAMP_STEP : -RAMP_STEP;
+        }
+    }, 50);
+}
+
+function getWavePacketRaw(presetName) {
+    const preset = PRESETS[presetName] || PRESETS.gentle;
+    const idx = Math.floor(Date.now() / 100) % preset.length;
+    const hex = preset[idx];
+    const bytes = hexToBytes(hex);
+    if (bytes.length !== 8) return { freq: [10,10,10,10], int: [0,0,0,0] };
+    return {
+        freq: bytes.slice(0, 4),
+        int: bytes.slice(4, 8),
+    };
 }
 
 // --- Web Bluetooth ---
@@ -208,6 +246,7 @@ function onDisconnected() {
     btBatteryChar = null;
     if (b0Timer) { clearInterval(b0Timer); b0Timer = null; }
     targetA = 0; targetB = 0;
+    rampCurrentA = 0; rampCurrentB = 0;
     currentA = 0; currentB = 0;
     awaitingAck = false; pendingMode = 0;
     extension_settings[MODULE_NAME].connected = false;
@@ -256,69 +295,46 @@ function nextSeq() {
     return seq;
 }
 
-function getWavePacket(presetName, volumePct) {
-    const preset = PRESETS[presetName] || PRESETS.gentle;
-    const idx = Math.floor(Date.now() / 100) % preset.length;
-    const hex = preset[idx];
-    const bytes = hexToBytes(hex);
-    if (bytes.length !== 8) return { freq: [10,10,10,10], int: [0,0,0,0] };
-    const vol = volumePct / 100;
-    return {
-        freq: bytes.slice(0, 4),
-        int: bytes.slice(4, 8).map(v => clamp(Math.round(v * vol), 0, 100)),
-    };
-}
-
 async function sendB0() {
     if (!btWriteChar) return;
 
     const s = extension_settings[MODULE_NAME];
-    const volA = s.volumeA ?? 100;
-    const volB = s.volumeB ?? 100;
+    const volA = (s.volumeA ?? 100) / 100;
+    const volB = (s.volumeB ?? 100) / 100;
 
-    // Build waveform packets with volume scaling
-    const packetA = getWavePacket(s.waveformA || 'gentle', volA);
-    const packetB = getWavePacket(s.waveformB || 'gentle', volB);
+    // Always use selected waveform presets, scale by ramp current + volume
+    const packetA = getWavePacketRaw(s.waveformA || 'gentle');
+    const packetB = getWavePacketRaw(s.waveformB || 'gentle');
 
-    // If we want sustained flat intensity, override waveform with flat at target * vol
-    const flatA = targetA > 0 ? clamp(Math.round(targetA * volA / 100), 0, 200) : 0;
-    const flatB = targetB > 0 ? clamp(Math.round(targetB * volB / 100), 0, 200) : 0;
+    const scaleA = (rampCurrentA / 200) * volA;
+    const scaleB = (rampCurrentB / 200) * volB;
 
-    // When using flat mode, set slot intensities proportional to target
-    // This is the key: waveform slot intensities drive the output
-    const aSlotStr = flatA > 0 ? clamp(flatA, 0, 100) : 0;
-    const bSlotStr = flatB > 0 ? clamp(flatB, 0, 100) : 0;
-
-    const aFreqs = flatA > 0 ? [240, 240, 240, 240] : packetA.freq;
-    const aInts  = flatA > 0 ? [aSlotStr, aSlotStr, aSlotStr, aSlotStr] : packetA.int;
-    const bFreqs = flatB > 0 ? [240, 240, 240, 240] : packetB.freq;
-    const bInts  = flatB > 0 ? [bSlotStr, bSlotStr, bSlotStr, bSlotStr] : packetB.int;
+    const aInts = packetA.int.map(v => clamp(Math.round(v * scaleA), 0, 100));
+    const bInts = packetB.int.map(v => clamp(Math.round(v * scaleB), 0, 100));
 
     // Build B0 frame
     const buf = new Uint8Array(20);
     buf[0] = 0xB0;
 
-    // Mode: both channels absolute (0x0F = 0000 1111)
-    // But per DG-Kit: when not changing strength, mode = 0
-    // We always use absolute for simplicity
+    // Mode: both channels absolute
     const modeCombined = (MODE_ABSOLUTE << 2) | MODE_ABSOLUTE; // 0x0F
 
-    if (!awaitingAck && (targetA !== currentA || targetB !== currentB)) {
+    // Use rampCurrent for strength bytes so the device sees the smoothed value
+    if (!awaitingAck && (rampCurrentA !== currentA || rampCurrentB !== currentB)) {
         seq = nextSeq();
         pendingMode = modeCombined;
         awaitingAck = true;
     } else if (awaitingAck) {
-        // Don't change strength while awaiting ack; keep current values
-        pendingMode = 0; // no change
+        pendingMode = 0; // no change until ack
     }
 
     buf[1] = ((seq & 0x0F) << 4) | (pendingMode & 0x0F);
-    buf[2] = clamp(targetA, 0, 200);
-    buf[3] = clamp(targetB, 0, 200);
+    buf[2] = clamp(Math.round(rampCurrentA), 0, 200);
+    buf[3] = clamp(Math.round(rampCurrentB), 0, 200);
 
-    buf.set(aFreqs, 4);
+    buf.set(packetA.freq, 4);
     buf.set(aInts, 8);
-    buf.set(bFreqs, 12);
+    buf.set(packetB.freq, 12);
     buf.set(bInts, 16);
 
     try {
@@ -519,8 +535,8 @@ function updateStatus() {
 
     $('#c3v2_targetA').text(targetA);
     $('#c3v2_targetB').text(targetB);
-    $('#c3v2_currentA').text(currentA);
-    $('#c3v2_currentB').text(currentB);
+    $('#c3v2_currentA').text(Math.round(rampCurrentA));
+    $('#c3v2_currentB').text(Math.round(rampCurrentB));
     $('#c3v2_battery').text(batteryLevel !== null ? batteryLevel + '%' : '--');
 }
 
@@ -631,6 +647,7 @@ jQuery(async () => {
 
     loadSettings();
     setupUI();
+    startRamping();
 
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
     eventSource.on(event_types.STREAM_TOKEN_RECEIVED, onStreamToken);
