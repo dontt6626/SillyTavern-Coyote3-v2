@@ -1,5 +1,9 @@
 # SillyTavern Coyote 3.0 Control v2
 
+> [!CAUTION]
+> **SAFETY & LIABILITY NOTICE**
+> This software controls an electrical muscle stimulation (e-stim) device. Improper use can cause burns, nerve damage, cardiac interference, or other serious personal injury. By downloading, installing, or using this software, you acknowledge that you do so entirely at your own risk. The authors and contributors of this project accept **no liability** for any misuse, malfunction, injury, or damages arising from the use of this software. You are solely responsible for understanding your device's safe operating limits, your own health conditions, and applicable laws in your jurisdiction. If you do not agree to assume full responsibility for your own safety, do not use this software.
+
 A SillyTavern extension for controlling your **DG-LAB Coyote 3.0** e-stim device via Web Bluetooth.
 
 ## Features
