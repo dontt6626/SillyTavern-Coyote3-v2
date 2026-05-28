@@ -659,6 +659,8 @@ function setupUI() {
 
     $('#c3v2_stop').on('click', function () {
         targetA = 0; targetB = 0;
+        rampCurrentA = 0; rampCurrentB = 0;
+        activePresetA = null; activePresetB = null;
         stopLoop();
         updateStatus();
         toastr.success('Stopped');
